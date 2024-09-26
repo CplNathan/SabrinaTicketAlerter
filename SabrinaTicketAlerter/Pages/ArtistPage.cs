@@ -1,0 +1,53 @@
+﻿using OpenQA.Selenium;
+using SabrinaTicketAlerter.Locators;
+using SabrinaTicketAlerter.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace SabrinaTicketAlerter.Pages
+{
+    public sealed class ArtistPage(IWebDriver driver) : BasePage<ArtistPageLocators, List<ConcertPage>>(driver)
+    {
+        public IReadOnlyCollection<IWebElement> ConcertList => driver.FindElements(Locators.Concerts);
+
+        protected override string PagePath => "/sabrina-carpenter-tickets/artist/2001092";
+
+        protected override Task ActionAsyncImplementation()
+        {
+            // throw new NotImplementedException();
+
+            // Any other important page navigational actions?
+            return Task.CompletedTask;
+        }
+
+        protected override ValueTask<List<ConcertPage>> GetDataAsyncImplementation()
+        {
+            var newPages = ConcertList.Select(x =>
+            {
+                try
+                {
+                    var monthAndDay = x.FindElements(Locators.ConcertMonthAndDay);
+
+                    var concertData = new ConcertData
+                    {
+                        Location = x.FindElement(Locators.ConcertLocation).GetAttribute("innerHTML"),
+                        Month = monthAndDay.First().GetAttribute("innerHTML"),
+                        Day = monthAndDay.Last().GetAttribute("innerHTML"),
+                        Path = new Uri(x.FindElement(Locators.ConcertListLink).GetAttribute("href")).PathAndQuery
+                    };
+
+                    return new ConcertPage(driver, concertData);
+                }
+                catch (NoSuchElementException)
+                {
+                    return default;
+                }
+            }).OfType<ConcertPage>();
+
+            return new ValueTask<List<ConcertPage>>(Task.FromResult(newPages.ToList()));
+        }
+    }
+}
