@@ -13,5 +13,7 @@ namespace SabrinaTicketAlerter.Models
         public string Row { get; set; }
 
         public string Price { get; set; }
+
+        public string Link { get; set; }
     }
 }

@@ -1,17 +1,25 @@
 ﻿using OpenQA.Selenium;
 using SabrinaTicketAlerter.Locators;
 using SabrinaTicketAlerter.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SabrinaTicketAlerter.Pages
 {
     public class ConcertPage(IWebDriver driver, ConcertData concertData) : BasePage<ConcertPageLocators, List<TicketData>>(driver)
     {
-        public IReadOnlyCollection<IWebElement> TicketList => driver.FindElements(Locators.Tickets);
+        public IReadOnlyCollection<IWebElement> TicketList
+        {
+            get
+            {
+                try
+                {
+                    return driver.FindElements(Locators.Tickets);
+                }
+                catch (NoSuchElementException)
+                {
+                    return [];
+                }
+            }
+        }
 
         public ConcertData ConcertData { get; } = concertData;
 
@@ -37,7 +45,8 @@ namespace SabrinaTicketAlerter.Pages
                     {
                         Section = sectionAndRow.First().GetAttribute("innerHTML"),
                         Row = sectionAndRow.Last().GetAttribute("innerHTML"),
-                        Price = x.FindElement(Locators.TicketPrice).GetAttribute("innerHTML")
+                        Price = x.FindElement(Locators.TicketPrice).GetAttribute("innerHTML"),
+                        Link = PageUrl.ToString()
                     };
 
                     return ticketData;

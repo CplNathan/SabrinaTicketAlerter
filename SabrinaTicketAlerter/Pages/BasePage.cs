@@ -29,7 +29,7 @@ namespace SabrinaTicketAlerter.Pages
 
         private string BaseUrl => "https://www.ticketmaster.co.uk/";
 
-        private Uri PageUrl => new Uri(new Uri(BaseUrl), PagePath);
+        protected Uri PageUrl => new Uri(new Uri(BaseUrl), PagePath);
 
         protected abstract string PagePath { get; }
 
@@ -39,14 +39,25 @@ namespace SabrinaTicketAlerter.Pages
         {
             return await Task.Run(() =>
             {
-                driver.Navigate().GoToUrl(PageUrl);
-                return Waiter.Until(x => driver.FindElement(Locators.PageLocator)) != null;
+                try
+                {
+                    driver.Navigate().GoToUrl(PageUrl);
+                    return Waiter.Until(x => x.FindElement(Locators.PageLocator)) != null;
+                }
+                catch (WebDriverTimeoutException)
+                {
+                    return false;
+                }
+                catch (NoSuchElementException)
+                {
+                    return false;
+                }
             });
         }
 
         public async Task<bool> PerformActionAsync()
         {
-            if (!IsCurrentPage)
+            if (!IsCurrentPage && !string.IsNullOrWhiteSpace(PagePath))
             {
                 var navigateSuccess = await Navigate();
 
@@ -59,6 +70,10 @@ namespace SabrinaTicketAlerter.Pages
             try
             {
                 await ActionAsyncImplementation();
+            }
+            catch (WebDriverTimeoutException)
+            {
+                return false;
             }
             catch (NoSuchElementException)
             {

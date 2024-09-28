@@ -1,17 +1,25 @@
 ﻿using OpenQA.Selenium;
 using SabrinaTicketAlerter.Locators;
 using SabrinaTicketAlerter.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SabrinaTicketAlerter.Pages
 {
     public sealed class ArtistPage(IWebDriver driver) : BasePage<ArtistPageLocators, List<ConcertPage>>(driver)
     {
-        public IReadOnlyCollection<IWebElement> ConcertList => driver.FindElements(Locators.Concerts);
+        public IReadOnlyCollection<IWebElement> ConcertList
+        {
+            get
+            {
+                try
+                {
+                    return driver.FindElements(Locators.Concerts);
+                }
+                catch (NoSuchElementException)
+                {
+                    return [];
+                }
+            }
+        }
 
         protected override string PagePath => "/sabrina-carpenter-tickets/artist/2001092";
 
