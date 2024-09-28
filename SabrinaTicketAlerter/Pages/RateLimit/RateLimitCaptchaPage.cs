@@ -37,7 +37,7 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
             // If we pass this no cooldown is required.
         }
 
-        protected override async Task ActionAsyncImplementation()
+        protected override async Task ActionAsyncImplementation(CancellationToken token)
         {
             driver.FindElement(Locators.CaptchaButton).Click();
 
@@ -48,44 +48,58 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
                 return;
             }
 
-            await Task.Run(() =>
+            var timeoutToken = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutToken.Token);
+
+            var solvedCaptcha = false;
+            while (!linkedToken.IsCancellationRequested && !solvedCaptcha)
             {
-                var jsDriver = (IJavaScriptExecutor)driver;
-                var canvasAndSlider = driver.FindElements(Locators.CaptchaCanvas);
-                var canvasJs = "return arguments[0].getContext('2d').getImageData(0, 0, arguments[0].width, arguments[0].height).data";
-                var test = jsDriver.ExecuteScript(canvasJs, canvasAndSlider.Last());
+                solvedCaptcha = await Task.Run(() =>
+                {
+                    var jsDriver = (IJavaScriptExecutor)driver;
+                    var canvasAndSlider = driver.FindElements(Locators.CaptchaCanvas);
+                    var canvasJs = "return arguments[0].getContext('2d').getImageData(0, 0, arguments[0].width, arguments[0].height).data";
+                    var test = jsDriver.ExecuteScript(canvasJs, canvasAndSlider.Last());
 
-                var canvasData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.First()) as IReadOnlyCollection<object>)?.Cast<Int64>().Select(x => Convert.ToByte(x));
-                var sliderData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.Last()) as IReadOnlyCollection<object>)?.Cast<Int64>().Select(x => Convert.ToByte(x));
+                    var canvasData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.First()) as IReadOnlyCollection<object>)?.Cast<Int64>().Select(x => Convert.ToByte(x));
+                    var sliderData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.Last()) as IReadOnlyCollection<object>)?.Cast<Int64>().Select(x => Convert.ToByte(x));
 
-                ArgumentNullException.ThrowIfNull(canvasData);
-                ArgumentNullException.ThrowIfNull(sliderData);
+                    ArgumentNullException.ThrowIfNull(canvasData);
+                    ArgumentNullException.ThrowIfNull(sliderData);
 
-                using var canvasMat = Mat.FromImageData(canvasData.ToArray());
-                using var sliderMat = Mat.FromArray(sliderData.ToArray());
+                    using var canvasMat = Mat.FromImageData(canvasData.ToArray());
+                    using var sliderMat = Mat.FromArray(sliderData.ToArray());
 
-                using var canvasEdges = canvasMat
-                    .CvtColor(ColorConversionCodes.RGB2GRAY)
-                    .Canny(100, 100)
-                    .CvtColor(ColorConversionCodes.GRAY2RGB);
+                    using var canvasEdges = canvasMat
+                        .CvtColor(ColorConversionCodes.RGB2GRAY)
+                        .Canny(100, 100)
+                        .CvtColor(ColorConversionCodes.GRAY2RGB);
 
-                using var sliderEdges = sliderMat
-                    .FindNonZero()
-                    .CvtColor(ColorConversionCodes.RGB2GRAY)
-                    .Canny(100, 100)
-                    .CvtColor(ColorConversionCodes.GRAY2RGB);
+                    using var sliderEdges = sliderMat
+                        .FindNonZero()
+                        .CvtColor(ColorConversionCodes.RGB2GRAY)
+                        .Canny(100, 100)
+                        .CvtColor(ColorConversionCodes.GRAY2RGB);
 
-                canvasEdges
-                    .MatchTemplate(sliderEdges, TemplateMatchModes.CCoeffNormed)
-                    .MinMaxLoc(out Point _, out Point maxVal);
+                    canvasEdges
+                        .MatchTemplate(sliderEdges, TemplateMatchModes.CCoeffNormed)
+                        .MinMaxLoc(out Point _, out Point maxVal);
 
-                var topLeft = maxVal; // this is pos?
-                var bottomRight = new Point(maxVal.X + sliderEdges.Width, maxVal.Y + sliderEdges.Height);
+                    var topLeft = maxVal; // this is start pos?
+                    var bottomRight = new Point(maxVal.X + sliderEdges.Width, maxVal.Y + sliderEdges.Height);
 
-                canvasEdges.Rectangle(maxVal, bottomRight, new Scalar(255, 0, 0), 2);
+                    canvasEdges.Rectangle(maxVal, bottomRight, new Scalar(255, 0, 0), 2);
 
-                var result = Convert.ToBase64String(canvasEdges.ImEncode());
-            });
+                    var result = Convert.ToBase64String(canvasEdges.ImEncode());
+
+                    return false;
+                }, linkedToken.Token);
+            }
+            
+            if (linkedToken.IsCancellationRequested && !solvedCaptcha)
+            {
+                throw new TaskCanceledException();
+            }
         }
 
         protected override ValueTask<object> GetDataAsyncImplementation()

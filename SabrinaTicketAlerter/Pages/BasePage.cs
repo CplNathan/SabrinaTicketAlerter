@@ -13,9 +13,9 @@ namespace SabrinaTicketAlerter.Pages
     {
         public bool IsCurrentPage { get; }
 
-        public Task<bool> Navigate();
+        public Task<bool> Navigate(CancellationToken token);
 
-        public Task<bool> PerformActionAsync();
+        public Task<bool> PerformActionAsync(CancellationToken token);
 
         public ValueTask<object?> GetDataAsync();
     }
@@ -35,14 +35,22 @@ namespace SabrinaTicketAlerter.Pages
 
         protected WebDriverWait Waiter { get; } = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
 
-        public async Task<bool> Navigate()
+        public async Task<bool> Navigate(CancellationToken token)
         {
             return await Task.Run(() =>
             {
                 try
                 {
                     driver.Navigate().GoToUrl(PageUrl);
-                    return Waiter.Until(x => x.FindElement(Locators.PageLocator)) != null;
+                    return Waiter.Until(x =>
+                    {
+                        if (token.IsCancellationRequested)
+                        {
+                            throw new TaskCanceledException();
+                        }
+
+                        return x.FindElement(Locators.PageLocator);
+                    }) != null;
                 }
                 catch (WebDriverTimeoutException)
                 {
@@ -52,14 +60,18 @@ namespace SabrinaTicketAlerter.Pages
                 {
                     return false;
                 }
+                catch (TaskCanceledException)
+                {
+                    return false;
+                }
             });
         }
 
-        public async Task<bool> PerformActionAsync()
+        public async Task<bool> PerformActionAsync(CancellationToken token)
         {
             if (!IsCurrentPage && !string.IsNullOrWhiteSpace(PagePath))
             {
-                var navigateSuccess = await Navigate();
+                var navigateSuccess = await Navigate(token);
 
                 if (!navigateSuccess)
                 {
@@ -69,7 +81,7 @@ namespace SabrinaTicketAlerter.Pages
 
             try
             {
-                await ActionAsyncImplementation();
+                await ActionAsyncImplementation(token);
             }
             catch (WebDriverTimeoutException)
             {
@@ -79,11 +91,15 @@ namespace SabrinaTicketAlerter.Pages
             {
                 return false;
             }
+            catch (TaskCanceledException)
+            {
+                return false;
+            }
 
             return true;
         }
 
-        protected abstract Task ActionAsyncImplementation();
+        protected abstract Task ActionAsyncImplementation(CancellationToken token);
 
         public async ValueTask<object?> GetDataAsync()
             => await GetDataAsyncImplementation();

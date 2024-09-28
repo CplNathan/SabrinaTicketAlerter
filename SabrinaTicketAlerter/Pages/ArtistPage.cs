@@ -23,7 +23,7 @@ namespace SabrinaTicketAlerter.Pages
 
         protected override string PagePath => "/sabrina-carpenter-tickets/artist/2001092";
 
-        protected override Task ActionAsyncImplementation()
+        protected override Task ActionAsyncImplementation(CancellationToken token)
         {
             // throw new NotImplementedException();
 

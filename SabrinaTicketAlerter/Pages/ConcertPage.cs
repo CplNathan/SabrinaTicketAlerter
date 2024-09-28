@@ -25,7 +25,7 @@ namespace SabrinaTicketAlerter.Pages
 
         protected override string PagePath => ConcertData.Path;
 
-        protected override Task ActionAsyncImplementation()
+        protected override Task ActionAsyncImplementation(CancellationToken token)
         {
             // throw new NotImplementedException();
 

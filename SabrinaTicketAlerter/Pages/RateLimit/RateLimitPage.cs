@@ -31,7 +31,7 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
             CurrentCooldown = TimeSpan.FromSeconds(Math.Max(cooldownInterval.TotalSeconds, CurrentCooldown.Subtract(cooldownInterval).TotalSeconds));
         }
 
-        protected override async Task ActionAsyncImplementation()
+        protected override async Task ActionAsyncImplementation(CancellationToken token)
         {
             await Task.Delay(CurrentCooldown);
 

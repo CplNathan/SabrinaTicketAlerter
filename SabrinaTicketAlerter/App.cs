@@ -16,7 +16,6 @@ namespace SabrinaTicketAlerter
             while (!token.IsCancellationRequested)
             {
                 var driver = UndetectedChromeDriver.Create(userDataDir: UserDataHelper.UserDataPath, driverExecutablePath: await new ChromeDriverInstaller().Auto());
-                // driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(5);
 
                 var webhookUrl = "https://discordapp.com/api/webhooks/1288911791975563375/bfX0ukcOE1e-UfAz32SjukcTWjhq3lAUBlfyxxvKjEJe1GE-wNJbjgl-rhom-PHGrET6";
                 var discordNotification = new DiscordHelper(new FlurlClient(), webhookUrl);
@@ -36,13 +35,13 @@ namespace SabrinaTicketAlerter
 
                             foreach (var concertPage in concertPages.Where(x => !ignoredLocations.Any(y => x.ConcertData.Location?.Contains(y, StringComparison.InvariantCultureIgnoreCase) ?? false)))
                             {
-                                var concertActionSuccess = await concertPage.PerformActionAsync();
+                                var concertActionSuccess = await concertPage.PerformActionAsync(token);
                                 if (!concertActionSuccess || !concertPage.IsCurrentPage)
                                 {
                                     break;
                                 }
 
-                                await Task.Delay(TimeSpan.FromSeconds(Random.Shared.Next(15, 25)));
+                                await Task.Delay(TimeSpan.FromSeconds(Random.Shared.Next(15, 20)), token);
 
                                 var tickets = (await concertPage.GetDataAsync()) as IEnumerable<TicketData> ?? [];
                                 foreach (var ticket in tickets)
@@ -73,11 +72,15 @@ namespace SabrinaTicketAlerter
                                 }
                                 break;
                             case Type rateLimitType when typeof(IRateLimitPage).IsAssignableFrom(rateLimitType):
-                                await currentPage.PerformActionAsync();
+                                var captchaSolved = await currentPage.PerformActionAsync(token);
+                                if (!captchaSolved)
+                                {
+                                    throw new WebDriverException("Captcha was not solveable");
+                                }
                                 break;
                             default:
                                 registeredPages = [new ArtistPage(driver), new RateLimitPage(driver), new RateLimitCaptchaPage(driver)];
-                                await registeredPages[0].PerformActionAsync();
+                                await registeredPages[0].PerformActionAsync(token);
 
                                 if (!concertPages.Any())
                                 {
