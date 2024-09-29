@@ -24,7 +24,7 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
 
         protected TimeSpan CurrentCooldown { get; set; } = cooldownInterval;
 
-        private static readonly TimeSpan cooldownInterval = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan cooldownInterval = TimeSpan.FromSeconds(30);
 
         public override void SignalSuccess()
         {

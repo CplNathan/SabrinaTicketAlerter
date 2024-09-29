@@ -1,10 +1,12 @@
 ﻿using OpenCvSharp;
 using OpenQA.Selenium;
+using OpenQA.Selenium.Interactions;
 using SabrinaTicketAlerter.Locators.RateLimit;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -37,6 +39,9 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
             // If we pass this no cooldown is required.
         }
 
+        public async Task TestAction()
+            => await ActionAsyncImplementation(CancellationToken.None);
+
         protected override async Task ActionAsyncImplementation(CancellationToken token)
         {
             driver.FindElement(Locators.CaptchaButton).Click();
@@ -59,25 +64,34 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
                     var jsDriver = (IJavaScriptExecutor)driver;
                     var canvasAndSlider = driver.FindElements(Locators.CaptchaCanvas);
                     var canvasJs = "return arguments[0].getContext('2d').getImageData(0, 0, arguments[0].width, arguments[0].height).data";
-                    var test = jsDriver.ExecuteScript(canvasJs, canvasAndSlider.Last());
+                    var canvasSizeJs = "return [arguments[0].width, arguments[0].height]";
 
-                    var canvasData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.First()) as IReadOnlyCollection<object>)?.Cast<Int64>().Select(x => Convert.ToByte(x));
-                    var sliderData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.Last()) as IReadOnlyCollection<object>)?.Cast<Int64>().Select(x => Convert.ToByte(x));
+                    var canvasData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.First()) as IReadOnlyCollection<object>)?.Select(x => Convert.ToByte(x));
+                    var sliderData = (jsDriver.ExecuteScript(canvasJs, canvasAndSlider.Last()) as IReadOnlyCollection<object>)?.Select(x => Convert.ToByte(x));
+
+                    var canvasSize = (jsDriver.ExecuteScript(canvasSizeJs, canvasAndSlider.First()) as IReadOnlyCollection<object>)?.Select(x => Convert.ToInt32(x));
 
                     ArgumentNullException.ThrowIfNull(canvasData);
                     ArgumentNullException.ThrowIfNull(sliderData);
+                    ArgumentNullException.ThrowIfNull(canvasSize);
 
-                    using var canvasMat = Mat.FromImageData(canvasData.ToArray());
-                    using var sliderMat = Mat.FromArray(sliderData.ToArray());
+                    using var canvasMat = new Mat(new Size(canvasSize.ElementAt(0), canvasSize.ElementAt(1)), MatType.CV_8UC4); // Mat.FromArray(canvasData.ToArray());
+                    using var sliderMat = new Mat(new Size(canvasSize.ElementAt(0), canvasSize.ElementAt(1)), MatType.CV_8UC4); // Mat.FromArray(sliderData.ToArray());
+
+                    var length = canvasSize.ElementAt(0) * canvasSize.ElementAt(1) * 4;
+                    Marshal.Copy(canvasData.ToArray(), 0, canvasMat.Data, length);
+                    Marshal.Copy(sliderData.ToArray(), 0, sliderMat.Data, length);
 
                     using var canvasEdges = canvasMat
                         .CvtColor(ColorConversionCodes.RGB2GRAY)
                         .Canny(100, 100)
                         .CvtColor(ColorConversionCodes.GRAY2RGB);
 
-                    using var sliderEdges = sliderMat
-                        .FindNonZero()
-                        .CvtColor(ColorConversionCodes.RGB2GRAY)
+                    using var sliderGray = sliderMat
+                        .CvtColor(ColorConversionCodes.RGB2GRAY);
+
+                    var sliderBounds = sliderGray.FindNonZero().BoundingRect();
+                    using var sliderEdges = sliderGray[sliderBounds]
                         .Canny(100, 100)
                         .CvtColor(ColorConversionCodes.GRAY2RGB);
 
@@ -85,17 +99,20 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
                         .MatchTemplate(sliderEdges, TemplateMatchModes.CCoeffNormed)
                         .MinMaxLoc(out Point _, out Point maxVal);
 
-                    var topLeft = maxVal; // this is start pos?
-                    var bottomRight = new Point(maxVal.X + sliderEdges.Width, maxVal.Y + sliderEdges.Height);
+                    var startPoint = maxVal; // this is start pos?
+                    var endPoint = new Point(maxVal.X + sliderEdges.Width, maxVal.Y + sliderEdges.Height);
+                    var foundRectangle = Rect.FromLTRB(startPoint.X, startPoint.Y, endPoint.X, endPoint.Y);
+                    var rectangleCenter = new Point(foundRectangle.X + foundRectangle.Width / 2, foundRectangle.Y + foundRectangle.Height / 2);
 
-                    canvasEdges.Rectangle(maxVal, bottomRight, new Scalar(255, 0, 0), 2);
+                    var dragAction = new Actions(driver);
 
-                    var result = Convert.ToBase64String(canvasEdges.ImEncode());
+                    var sliderButton = driver.FindElement(Locators.CaptchaSlider);
+                    var dragAndDrop = dragAction.DragAndDropToOffset(sliderButton, foundRectangle.X - Random.Shared.Next(0, (int)(foundRectangle.Width * 0.025)), 0);
 
                     return false;
                 }, linkedToken.Token);
             }
-            
+
             if (linkedToken.IsCancellationRequested && !solvedCaptcha)
             {
                 throw new TaskCanceledException();

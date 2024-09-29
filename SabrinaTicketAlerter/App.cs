@@ -31,7 +31,7 @@ namespace SabrinaTicketAlerter
                         var concertPages = registeredPages.OfType<ConcertPage>();
                         if (concertPages.Any())
                         {
-                            string[] ignoredLocations = ["Dublin", "Glasgow"];
+                            string[] ignoredLocations = ["Dublin", "Glasgow", "Birmingham"];
 
                             foreach (var concertPage in concertPages.Where(x => !ignoredLocations.Any(y => x.ConcertData.Location?.Contains(y, StringComparison.InvariantCultureIgnoreCase) ?? false)))
                             {
@@ -73,7 +73,7 @@ namespace SabrinaTicketAlerter
                                 break;
                             case Type rateLimitType when typeof(IRateLimitPage).IsAssignableFrom(rateLimitType):
                                 var captchaSolved = await currentPage.PerformActionAsync(token);
-                                if (!captchaSolved)
+                                if (!captchaSolved && currentPage.IsCurrentPage)
                                 {
                                     throw new WebDriverException("Captcha was not solveable");
                                 }

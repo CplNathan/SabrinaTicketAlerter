@@ -14,5 +14,7 @@ namespace SabrinaTicketAlerter.Locators.RateLimit
         public By CaptchaButton => By.XPath("//div[@class=\"geetest_btn\"]");
 
         public By CaptchaCanvas => By.XPath("//div[@class=\"geetest_slicebg geetest_absolute\"]/canvas");
+
+        public By CaptchaSlider => By.XPath("//div[@class=\"geetest_slider_button\"]");
     }
 }
