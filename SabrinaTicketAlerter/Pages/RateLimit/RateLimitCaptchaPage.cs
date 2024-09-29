@@ -57,9 +57,9 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
             var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutToken.Token);
 
             var solvedCaptcha = false;
-            while (!linkedToken.IsCancellationRequested && !solvedCaptcha)
+            while (!linkedToken.IsCancellationRequested && !solvedCaptcha && IsCurrentPage)
             {
-                solvedCaptcha = await Task.Run(() =>
+                solvedCaptcha = await Task.Run(async () =>
                 {
                     var jsDriver = (IJavaScriptExecutor)driver;
                     var canvasAndSlider = driver.FindElements(Locators.CaptchaCanvas);
@@ -107,13 +107,17 @@ namespace SabrinaTicketAlerter.Pages.RateLimit
                     var dragAction = new Actions(driver);
 
                     var sliderButton = driver.FindElement(Locators.CaptchaSlider);
-                    var dragAndDrop = dragAction.DragAndDropToOffset(sliderButton, foundRectangle.X - Random.Shared.Next(0, (int)(foundRectangle.Width * 0.025)), 0);
+                    dragAction
+                        .DragAndDropToOffset(sliderButton, foundRectangle.X - Random.Shared.Next(0, (int)(foundRectangle.Width * 0.025)), 0)
+                        .Perform();
 
-                    return false;
+                    await Task.Delay(TimeSpan.FromSeconds(2.5));
+
+                    return !IsCurrentPage;
                 }, linkedToken.Token);
             }
 
-            if (linkedToken.IsCancellationRequested && !solvedCaptcha)
+            if (linkedToken.IsCancellationRequested || !solvedCaptcha)
             {
                 throw new TaskCanceledException();
             }
